@@ -1,9 +1,9 @@
 /**
  * Benchmark: int[32e6][2] (contiguous) vs vector<vector<int>>(32e6, vector<int>(2))
- * Measures allocation time and memory usage.
- * On Windows uses QueryPerformanceCounter for high-resolution timing.
+ * Measures allocation time and memory usage on Windows.
  */
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <iostream>
@@ -14,7 +14,6 @@
 #include <psapi.h>
 #pragma comment(lib, "psapi.lib")
 #else
-#include <chrono>
 #include <fstream>
 #include <sstream>
 #include <string>
@@ -24,24 +23,6 @@ namespace {
 
 constexpr size_t ROWS = 32ULL * 1000000;  // 32e6
 constexpr size_t COLS = 2;
-
-#if defined(_WIN32) || defined(_WIN64)
-// Query Performance Counter: alta resolución en Windows
-inline long long qpc_now() {
-    LARGE_INTEGER t;
-    QueryPerformanceCounter(&t);
-    return t.QuadPart;
-}
-
-inline double qpc_elapsed_ms(long long start_ticks, long long end_ticks) {
-    static LARGE_INTEGER freq = []() {
-        LARGE_INTEGER f;
-        QueryPerformanceFrequency(&f);
-        return f;
-    }();
-    return (end_ticks - start_ticks) * 1000.0 / static_cast<double>(freq.QuadPart);
-}
-#endif
 
 struct MemoryUsage {
     double working_set_mb = -1.0;   // RAM en uso
@@ -107,41 +88,20 @@ int main() {
     // ---- Contiguous 2D array: int[32e6][2] (heap) ----
     std::cout << "=== Contiguous array: int[32e6][2] (heap) ===\n";
     MemoryUsage mem_before = get_current_memory();
-#if defined(_WIN32) || defined(_WIN64)
-    long long t0 = qpc_now();
-#else
     auto t0 = std::chrono::high_resolution_clock::now();
-#endif
 
     int (*arr)[2] = new int[ROWS][2];
 
-#if defined(_WIN32) || defined(_WIN64)
-    long long t1 = qpc_now();
-#else
     auto t1 = std::chrono::high_resolution_clock::now();
-#endif
     touch_memory(&arr[0][0], ROWS * COLS);
-#if defined(_WIN32) || defined(_WIN64)
-    long long t2 = qpc_now();
-#else
     auto t2 = std::chrono::high_resolution_clock::now();
-#endif
     MemoryUsage mem_after_array = get_current_memory();
 
-#if defined(_WIN32) || defined(_WIN64)
-    double alloc_time_ms = qpc_elapsed_ms(t0, t1);
-    double touch_time_ms = qpc_elapsed_ms(t1, t2);
-#else
     double alloc_time_ms =
         std::chrono::duration<double, std::milli>(t1 - t0).count();
     double touch_time_ms =
         std::chrono::duration<double, std::milli>(t2 - t1).count();
-#endif
-    std::cout << "  Allocation time: " << alloc_time_ms << " ms";
-#if defined(_WIN32) || defined(_WIN64)
-    std::cout << " (QPC)";
-#endif
-    std::cout << "\n";
+    std::cout << "  Allocation time: " << alloc_time_ms << " ms\n";
     std::cout << "  Touch time:      " << touch_time_ms << " ms\n";
     std::cout << "  Memory (working set): " << mem_after_array.working_set_mb << " MB (delta: "
               << (mem_after_array.working_set_mb - mem_before.working_set_mb) << " MB)\n";
@@ -156,41 +116,18 @@ int main() {
     // ---- vector<vector<int>> ----
     std::cout << "=== vector<vector<int>>(32e6, vector<int>(2)) ===\n";
     mem_before = get_current_memory();
-#if defined(_WIN32) || defined(_WIN64)
-    t0 = qpc_now();
-#else
     t0 = std::chrono::high_resolution_clock::now();
-#endif
 
     std::vector<std::vector<int>> v(ROWS, std::vector<int>(COLS));
 
-#if defined(_WIN32) || defined(_WIN64)
-    t1 = qpc_now();
-#else
     t1 = std::chrono::high_resolution_clock::now();
-#endif
     touch_memory(v);
-#if defined(_WIN32) || defined(_WIN64)
-    t2 = qpc_now();
-#else
     t2 = std::chrono::high_resolution_clock::now();
-#endif
     MemoryUsage mem_after_vec = get_current_memory();
 
-#if defined(_WIN32) || defined(_WIN64)
-    alloc_time_ms = qpc_elapsed_ms(t0, t1);
-    touch_time_ms = qpc_elapsed_ms(t1, t2);
-#else
-    alloc_time_ms =
-        std::chrono::duration<double, std::milli>(t1 - t0).count();
-    touch_time_ms =
-        std::chrono::duration<double, std::milli>(t2 - t1).count();
-#endif
-    std::cout << "  Allocation time: " << alloc_time_ms << " ms";
-#if defined(_WIN32) || defined(_WIN64)
-    std::cout << " (QPC)";
-#endif
-    std::cout << "\n";
+    alloc_time_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    touch_time_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
+    std::cout << "  Allocation time: " << alloc_time_ms << " ms\n";
     std::cout << "  Touch time:      " << touch_time_ms << " ms\n";
     std::cout << "  Memory (working set): " << mem_after_vec.working_set_mb << " MB (delta: "
               << (mem_after_vec.working_set_mb - mem_before.working_set_mb) << " MB)\n";
